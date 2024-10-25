@@ -1,29 +1,66 @@
-import { task, types } from "hardhat/config";
-import { Contract } from "ethers";
-import { TransactionResponse } from "@ethersproject/abstract-provider";
-import { env } from "../lib/env";
-import { getContract } from "../lib/contract";
-import { getWallet } from "../lib/wallet";
+import { task } from 'hardhat/config';
+import { Contract } from 'ethers';
+import { HardhatRuntimeEnvironment } from 'hardhat/types';
 
-task("deploy-contract", "Deploy NFT contract").setAction(async (_, hre) => {
-  return hre.ethers
-    .getContractFactory("MyNFT", getWallet())
-    .then((contractFactory) => contractFactory.deploy())
-    .then((result) => {
-      process.stdout.write(`Contract address: ${result.address}`);
-    });
+
+task('deploy', 'Deploys the NFT contract').setAction(async (_, hre) => {
+  try {
+    const NFT = await hre.ethers.getContractFactory('MyNFT');
+    const nft = await NFT.deploy();
+    await nft.waitForDeployment(); 
+
+    const address = await nft.getAddress(); 
+    console.log('NFT deployed to:', address);
+
+
+    return address;
+  } catch (error) {
+    console.error('Error deploying contract:', error);
+    throw error;
+  }
 });
 
-task("mint-nft", "Mint an NFT")
-  .addParam("tokenUri", "Your ERC721 Token URI", undefined, types.string)
-  .setAction(async (tokenUri, hre) => {
-    return getContract("MyNFT", hre)
-      .then((contract: Contract) => {
-        return contract.mintNFT(env("ETH_PUBLIC_KEY"), tokenUri, {
-          gasLimit: 500_000,
-        });
-      })
-      .then((tr: TransactionResponse) => {
-        process.stdout.write(`TX hash: ${tr.hash}`);
-      });
+
+task('mint', 'Mints an NFT')
+  .addParam('contract', 'The address of the NFT contract')
+  .addParam('recipient', 'The address of the recipient')
+  .setAction(async (taskArgs, hre) => {
+    try {
+      const [signer] = await hre.ethers.getSigners();
+      console.log('Minting from account:', signer.address);
+
+      const nft = await hre.ethers.getContractAt('MyNFT', taskArgs.contract);
+
+      const owner = await nft.owner();
+      if (owner.toLowerCase() !== signer.address.toLowerCase()) {
+        throw new Error(
+          `Only the contract owner can mint. Owner: ${owner}, Signer: ${signer.address}`,
+        );
+      }
+
+      console.log('Minting NFT...');
+      const tx = await nft.mintNFT(taskArgs.recipient);
+      console.log('Transaction hash:', tx.hash);
+
+      console.log('Waiting for transaction confirmation...');
+      const receipt = await tx.wait();
+
+      const tokenId = await nft.getCurrentCounter();
+
+      console.log('\nMinting successful!');
+      console.log('Transaction receipt:', receipt.hash);
+      console.log('Token ID:', tokenId.toString());
+      console.log('Recipient:', taskArgs.recipient);
+      console.log('Contract:', taskArgs.contract);
+
+      return tokenId;
+    } catch (error) {
+      if (error.message?.includes('execution reverted')) {
+        console.error('Transaction reverted. Common causes:');
+        console.error('- Sender is not the contract owner');
+        console.error('- Invalid recipient address');
+      }
+      console.error('\nError details:', error);
+      throw error;
+    }
   });

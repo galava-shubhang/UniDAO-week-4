@@ -1,23 +1,31 @@
-import("@nomiclabs/hardhat-ethers");
-import("@nomiclabs/hardhat-waffle");
-import dotenv from "dotenv";
+import { HardhatUserConfig } from 'hardhat/config';
+import '@nomicfoundation/hardhat-toolbox';
+import * as dotenv from 'dotenv';
+import './tasks/nft';
 
-const argv = JSON.parse(env("npm_config_argv"));
-if (argv.original !== ["hardhat", "test"]) {
-  require('dotenv').config();
-}
+dotenv.config();
 
-import("./tasks/nft");
-
-import { HardhatUserConfig } from "hardhat/config";
+const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || '';
+const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
 
 const config: HardhatUserConfig = {
-  solidity: "0.8.0",
+  solidity: {
+    version: '0.8.27',
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+    },
+  },
   networks: {
     sepolia: {
-      url: `https://eth-sepolia.alchemyapi.io/v2/${process.env.ALCHEMY_API_KEY}`,
-      accounts: [process.env.ETH_PRIVATE_KEY],
+      url: `https://eth-sepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}`,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
+  },
+  etherscan: {
+    apiKey: process.env.ETHERSCAN_API_KEY || '',
   },
 };
 
